@@ -1,0 +1,21 @@
+@startuml
+title "class ConfigLoader"
+class ConfigLoader{
+	- app.option: {
+		schema: jsonschema,
+		httpTimeoutRequestInS: integer,
+		httpTimeoutInS: interger,
+		httpRetryDelayIns: integer}
+	- app.layers: object
+	- config: {}
+	- layers: [layer]
+	+ load(layers)
+	+ hasLayersInError()
+	+ getLayersInError()
+	+ hasLayersInSuccess()
+	+ getLayersInSuccess()
+	- {static}_putLayerInError(layer, error)
+	- _loadLayer(layer)
+	- _mergeConfig()
+}
+@enduml
