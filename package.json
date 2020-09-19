@@ -1,6 +1,6 @@
 {
   "name": "@sbesson/configuration-loader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Permet de charger une configuration via un object JSON, un fichier ou une url",
   "main": "index.js",
   "directories": {
