@@ -133,6 +133,14 @@ Description des différents types :
   }
   ```
 
+  Ce layer peut générer l'événement `layer_url_attempt_error`, qui est généré quand une tentative échoue. On reçoit en paramètre le layer et la tentative en échec
+
+  ```javascript
+  configLoader.on("layer_url_attempt_error", (layer, attempt) => {
+    console.log("tentative en erreur", layer.desc, layer.url, attempt.message);
+  });
+  ```
+
 * le type __json-db__  
   Ce type permet d'obtenir la configuration depuis une "base de donnée json" voir le module [@sbesson/json-db](https://www.npmjs.com/package/@sbesson/json-db).  
   Ce layer doit contenir un attribut `file` et un attribut `id` qui sera utilisé via le package
@@ -145,14 +153,6 @@ Description des différents types :
     file: "/path/collection",
     id: "config"
   }
-  ```
-
-Ce layer peut générer l'événement `layer_url_attempt_error`, qui est généré quand une tentative échoue. On reçoit en paramètre le layer et la tentative en échec
-
-  ```javascript
-  configLoader.on("layer_url_attempt_error", (layer, attempt) => {
-    console.log("tentative en erreur", layer.desc, layer.url, attempt.message);
-  });
   ```
 
 * le type __environment__  
@@ -190,8 +190,7 @@ que le jsonschema (s'il y en a un) de la configuration soit sans erreur.
 
 en cas d'erreur, retourne un objet de type `Error` contenant deux attributs `type` et `details` en
 plus du `message`.  
-`type` contiendra soit `layer` (Si tous les layers sont en erreur), soit `jsonschema` en cas
-* d'erreur du à jsonschema.  
+`type` contiendra soit `layer` (Si tous les layers sont en erreur), soit `jsonschema` en cas d'erreur du à jsonschema.  
 `details` contiendra soit le résultat de `getLayersInError` soit les erreurs de jsonschema.
 
 ### hasLayersInError()
@@ -261,7 +260,7 @@ Cette class peut générer les événements suivants :
 
   ```javascript
   configLoader.on("layer_load_stop", (layer) => {
-    console.log("Début du chargement de la configuration du layer", layer.desc, layer.config);
+    console.log("Fin du chargement de la configuration du layer", layer.desc, layer.config);
   });
   ```
 
@@ -269,6 +268,6 @@ Cette class peut générer les événements suivants :
 
   ```javascript
   configLoader.on("layer_load_error", (layer) => {
-    console.log("Début du chargement de la configuration du layer", layer.desc, layer.error);
+    console.log("Erreur lors du chargement de la configuration du layer", layer.desc, layer.error);
   });
   ```
