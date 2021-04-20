@@ -2,7 +2,8 @@
 
 const _ = require("lodash");
 const consign = require("consign");
-const Ajv = require("ajv").default;
+const Ajv = require("ajv");
+const ajvFormats = require("ajv-formats");
 const EventEmitter = require("events");
 
 const layerModel = require("./models/layer.js");
@@ -23,6 +24,7 @@ class ConfigLoader extends EventEmitter {
 
 		if (_.isObject(jsonschema)) {
 			const ajv = new Ajv({allErrors: true});
+			ajvFormats(ajv);
 			this.ajvValidate = ajv.compile(jsonschema);
 		}
 
