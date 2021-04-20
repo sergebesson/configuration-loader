@@ -250,9 +250,9 @@ describe("class ConfigLoader", function () {
 							type: "jsonschema",
 							details: [
 								{
-									dataPath: ".option1",
+									instancePath: "/option1",
 									keyword: "type",
-									message: "should be string",
+									message: "must be string",
 									params: {
 										type: "string",
 									},

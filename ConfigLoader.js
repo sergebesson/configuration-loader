@@ -2,7 +2,7 @@
 
 const _ = require("lodash");
 const consign = require("consign");
-const Ajv = require("ajv");
+const Ajv = require("ajv").default;
 const EventEmitter = require("events");
 
 const layerModel = require("./models/layer.js");
