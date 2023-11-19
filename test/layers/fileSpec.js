@@ -56,7 +56,7 @@ describe("layer file", function () {
 			file: "file_not_found.json",
 			errorExpect: {
 				message: "Impossible de lire file_not_found.json",
-				cause: "Cannot find module '../file_not_found.json'",
+				cause: sinon.match(/Cannot find module '..\/file_not_found.json'/),
 			},
 		}, {
 			file: "./test/data/configurationFileInvalid.json",
