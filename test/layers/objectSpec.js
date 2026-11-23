@@ -1,12 +1,13 @@
 "use strict";
 
-const {chai: {expect}, example} = require("@sbesson/test-helpers");
+const assert = require("node:assert/strict");
+const {describe, test} = require("node:test");
 
 const layerObject = require("../../layers/object.js")();
 
 describe("layer object", function () {
 	describe("load()", function () {
-		it("Doit retourner la configuration", function () {
+		test("Doit retourner la configuration", function () {
 			// WHEN
 			return layerObject.load({
 				type: "object",
@@ -14,30 +15,18 @@ describe("layer object", function () {
 				config: {option1: "value1", option2: {cle1: "value2"}},
 			}).then((layer) => {
 				// THEN
-				expect(layer.config).to.deep.equals({option1: "value1", option2: {cle1: "value2"}});
-				expect(layer.error).to.be.undefined;
+				assert.deepEqual(layer.config, {option1: "value1", option2: {cle1: "value2"}});
+				assert.equal(layer.error, undefined);
 			});
 		});
-		example([{
-			config: "string",
-		}, {
-			config: true,
-		}, {
-			config: null,
-		}, {
-			config: undefined,
-		}, {
-			config: ["value1", "value2"],
-		}], function () {
-			it("Doit retourner une erreur", function () {
+		["string", true, null, undefined, ["value1", "value2"]].forEach((config) => {
+			test(`Doit retourner une erreur [${JSON.stringify(config)}]`, function () {
 				// WHEN
-				return layerObject.load({config: this.config})
+				return layerObject.load({config})
 					.then((layer) => {
 						// THEN
-						expect(layer.error).to.be.an("error");
-						expect(layer.error.message).to.be.equals(
-							"'config' n'est pas un object",
-						);
+						assert.ok(layer.error instanceof Error);
+						assert.equal(layer.error.message, "'config' n'est pas un object");
 					});
 			});
 		});

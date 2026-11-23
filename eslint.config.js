@@ -3,7 +3,6 @@
 const {defineConfig, globalIgnores} = require("eslint/config");
 const js = require("@eslint/js");
 const node = require("eslint-plugin-n");
-const globals = require("globals");
 
 module.exports = defineConfig(globalIgnores(["coverage/", "eslint.config.js"]), {
 	files: ["**/*.js"],
@@ -232,10 +231,7 @@ module.exports = defineConfig(globalIgnores(["coverage/", "eslint.config.js"]), 
 	},
 }, {
 	files: ["test/**/*.js"],
-	languageOptions: {globals: globals.mocha},
 	rules: {
-		"no-unused-expressions": "off", //pour chai.js
-		"no-invalid-this": "off", //pour mocha
 		"max-nested-callbacks": "off",
 		"n/no-unpublished-require": "off",
 	},

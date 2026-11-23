@@ -1,32 +1,43 @@
 "use strict";
 
-const nock = require("nock").default;
-const {chai: {expect}, sinon, example} = require("@sbesson/test-helpers");
-const EventEmitter = require("events");
+const assert = require("node:assert/strict");
+const {describe, test, beforeEach, afterEach} = require("node:test");
+const {EventEmitter, once} = require("node:events");
 const {setTimeout: wait} = require("node:timers/promises");
+const nock = require("nock").default;
 
 const layerUrlFactory = require("../../layers/url.js");
 
 describe("layer url", function () {
-	beforeEach(function () {
-		this.timeService = function (callback, delay) {
-			return new Promise((resolve) => {
-				setTimeout(() => resolve(callback()), delay / 1000);
-			});
+	const httpTimeoutInS = 200;
+	let configLoader;
+	let eventSpy;
+	let expire;
+	let layerUrl;
+
+	beforeEach(function ({mock}) {
+		const timeService = function (callback, delay) {
+			if (delay === httpTimeoutInS * 1000) {
+				// Les tests déclenchent le délai global après les tentatives attendues.
+				return new Promise((resolve) => {
+					expire = () => resolve(callback());
+				});
+			}
+			return wait(delay / 1000).then(callback);
 		};
 
-		this.eventSpy = sinon.spy();
-		const configLoader = new EventEmitter();
-		configLoader.on("layer_url_attempt_error", this.eventSpy);
+		eventSpy = mock.fn();
+		configLoader = new EventEmitter();
+		configLoader.on("layer_url_attempt_error", eventSpy);
 
-		this.layerUrl = layerUrlFactory({
+		layerUrl = layerUrlFactory({
 			options: {
 				httpTimeoutRequestInS: 0.100, // => 100ms
-				httpTimeoutInS: 200, // => 200ms en réalité du au timeService
-				httpRetryDelayInS: 80, // => 5ms en réalité du au timeService
+				httpTimeoutInS,
+				httpRetryDelayInS: 80, // => 80ms avec le timeService
 			},
 			services: {
-				timeService: this.timeService,
+				timeService,
 			},
 			configLoader,
 		});
@@ -62,7 +73,7 @@ describe("layer url", function () {
 		});
 
 		describe("Quand la configuration doit être récupérée", function () {
-			example([{
+			[{
 				url: "http://host.domain.tld/config",
 				expectAttempts: [],
 			}, {
@@ -71,112 +82,103 @@ describe("layer url", function () {
 					status: 500,
 					data: "1ere erreur",
 					message: "Request failed with status code 500",
-					headers: sinon.match.any,
 				}, {
 					status: 503,
 					data: "2eme erreur",
 					message: "Request failed with status code 503",
-					headers: sinon.match.any,
 				}],
-			}], function () {
-				it("Doit retourner la configuration", function () {
+			}].forEach(({url, expectAttempts}) => {
+				test(`Doit retourner la configuration [${url}]`, function () {
 					// WHEN
 					const layerConf = {
 						type: "url",
 						desc: "configuration de type url",
-						url: this.url,
+						url,
 					};
-					return this.layerUrl.load(layerConf).then((layer) => {
+					return layerUrl.load(layerConf).then((layer) => {
 						// THEN
-						expect(layer.config).to.deep.equals({
+						assert.deepEqual(layer.config, {
 							option1: "value1", option2: {cle1: "value2"},
 						});
-						expect(layer.attempts).to.lookLike(this.expectAttempts);
-						expect(layer.error).to.be.undefined;
-
-						expect(this.eventSpy.callCount).to.equal(this.expectAttempts.length);
-						this.expectAttempts.forEach((attempt, index) => {
-							expect(this.eventSpy.args[index]).to.lookLike([layerConf, attempt]);
+						const attempts = layer.attempts.map(({headers, ...attempt}) => {
+							assert.ok(headers && typeof headers === "object");
+							return attempt;
 						});
+						assert.deepEqual(attempts, expectAttempts);
+						assert.equal(layer.error, undefined);
+
+						const emitted = eventSpy.mock.calls.map((call) => call.arguments);
+						assert.deepEqual(
+							emitted,
+							layer.attempts.map((attempt) => [layerConf, attempt]),
+						);
 					});
 				});
 			});
 		});
 
 		describe("Quand le layer fini en erreur", function () {
-			example([{
-				url: undefined,
-			}, {
-				url: null,
-			}, {
-				url: 1,
-			}, {
-				url: true,
-			}, {
-				url: ["http://host.domain.tld/config"],
-			}, {
-				url: {},
-			}, {
-				url: "bad_url",
-			}], function () {
-				it("Doit retourner l'erreur 'url' n'est pas valide", function () {
+			[undefined, null, 1, true, ["http://host.domain.tld/config"], {}, "bad_url"].forEach((url) => {
+				test(`Doit retourner l'erreur 'url' n'est pas valide [${JSON.stringify(url)}]`, function () {
 					// WHEN
-					return this.layerUrl.load({
+					return layerUrl.load({
 						type: "url",
-						url: this.url,
+						url,
 					}).then((layer) => {
 						// THEN
-						expect(layer.error).to.be.an("error");
-						expect(layer.error.message).to.be.equals(
-							"'url' n'est pas valide",
-						);
+						assert.ok(layer.error instanceof Error);
+						assert.equal(layer.error.message, "'url' n'est pas valide");
 
-						expect(this.eventSpy.notCalled).to.equal(true);
+						assert.equal(eventSpy.mock.callCount(), 0);
 					});
 				});
 			});
-			example([{
+			[{
 				url: "http://host.domain.tld/config_retry4delay10",
 				expectAttempts: {
 					message: "Request failed with status code 500",
 					status: 500,
 					data: "",
-					headers: sinon.match.any,
 				},
-				expectNbAttemptMin: 2,
-				expectNbAttemptMax: 3,
+				attemptsBeforeTimeout: 2,
 			}, {
 				url: "http://host.domain.tld/config_timeout",
 				expectAttempts: {message: "timeout of 100ms exceeded"},
-				expectNbAttemptMin: 1,
-				expectNbAttemptMax: 3,
+				attemptsBeforeTimeout: 1,
 			}, {
 				url: "http://unknown/config",
 				expectAttempts: {message: "getaddrinfo ENOTFOUND unknown"},
-				expectNbAttemptMin: 1,
-				expectNbAttemptMax: 20,
-			}], function () {
-				it("Doit retourner une erreur de timeout", function () {
+				attemptsBeforeTimeout: 1,
+			}].forEach(({url, expectAttempts, attemptsBeforeTimeout}) => {
+				test(`Doit retourner une erreur de timeout [${url}]`, {timeout: 2000}, async function ({signal}) {
 					// WHEN
 					const layerConf = {
 						type: "url",
 						desc: "configuration de type url",
-						url: this.url,
+						url,
 					};
-					return this.layerUrl.load(layerConf).then((layer) => {
-						// THEN
-						expect(layer.error).to.be.an("error");
-						expect(layer.error.message).to.be.equals(
-							"le délai de 200s a expiré",
-						);
-						expect(layer.attempts[0]).to.lookLike(this.expectAttempts);
-						expect(layer.attempts.length)
-							.to.be.within(this.expectNbAttemptMin, this.expectNbAttemptMax);
+					const loading = layerUrl.load(layerConf);
+					for (let i = 0; i < attemptsBeforeTimeout; i++) {
+						await once(configLoader, "layer_url_attempt_error", {signal});
+					}
+					expire();
+					const layer = await loading;
 
-						expect(this.eventSpy.called).to.equal(true);
-						expect(this.eventSpy.args[0])
-							.to.lookLike([layerConf, this.expectAttempts]);
-					});
+					// THEN
+					assert.ok(layer.error instanceof Error);
+					assert.equal(layer.error.message, "le délai de 200s a expiré");
+					assert.equal(layer.attempts.length, attemptsBeforeTimeout);
+					const [firstAttempt] = layer.attempts;
+					const {headers, ...attempt} = firstAttempt;
+					assert.deepEqual(attempt, expectAttempts);
+					if ("status" in expectAttempts) {
+						assert.ok(headers && typeof headers === "object");
+					} else {
+						assert.equal(headers, undefined);
+					}
+
+					assert.equal(eventSpy.mock.callCount(), attemptsBeforeTimeout);
+					assert.deepEqual(eventSpy.mock.calls[0].arguments, [layerConf, firstAttempt]);
 				});
 			});
 		});

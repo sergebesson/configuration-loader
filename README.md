@@ -3,6 +3,7 @@
 <!-- TOC -->
 
 - [Description](#description)
+- [Développement](#développement)
 - [Exemple d'utilisation](#exemple-dutilisation)
 - [API](#api)
   - [class ConfigLoader](#class-configloader)
@@ -20,6 +21,13 @@
 Permet de charger une configuration depuis un objet JSON, un fichier, une URL ou des variables d'environnement.
 
 Prérequis : Node.js 22.20.0 ou une version plus récente.
+
+## Développement
+
+- `npm test` exécute les tests avec `node:test`.
+- `npm run coverage` exécute les mêmes tests et affiche le rapport de couverture de Node.js dans le terminal (lignes, branches et fonctions). Aucun rapport HTML n'est généré.
+- `npm run lint` vérifie le code avec ESLint.
+- `npm run knip` détecte les dépendances inutilisées ou non déclarées. Les layers chargés dynamiquement par `consign` sont déclarés comme points d'entrée dans `knip.json`.
 
 ## Exemple d'utilisation
 
