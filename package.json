@@ -44,14 +44,10 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/sergebesson/configuration-loader.git"
+		"url": "git+ssh://git@github.com/sergebesson/configuration-loader.git"
 	},
 	"bugs": {
-		"url": "https://github.com/sergebesson/configuration-loader/issues"
+		"url": "git+ssh://git@github.com/sergebesson/configuration-loader/issues"
 	},
-	"homepage": "https://github.com/sergebesson/configuration-loader#readme",
-	"publishConfig": {
-		"registry": "https://registry.npmjs.org/",
-		"access": "public"
-	}
+	"homepage": "git+ssh://git@github.com/sergebesson/configuration-loader#readme"
 }
