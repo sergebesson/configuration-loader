@@ -76,11 +76,6 @@ describe("class ConfigLoader", function () {
 					desc: "configuration de type url",
 					url: "http://host.domain.tld/config",
 				}, {
-					type: "json-db",
-					desc: "configuration de type json-db",
-					file: "test/data/configurationJsonDb",
-					id: 1,
-				}, {
 					type: "environment",
 					desc: "configuration de type environment",
 					mapping: {
@@ -95,12 +90,10 @@ describe("class ConfigLoader", function () {
 					option2: {
 						cle1: "value2",
 						cle2: "new value cle2",
-						cle3: "value cle3",
 						cle4: "envValue2",
 					},
 					option3: "value3",
 					option4: "value4",
-					option5: "value5",
 					option6: "envValue1",
 					option7: true,
 					option8: 10,

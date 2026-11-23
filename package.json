@@ -7,7 +7,6 @@
 		"test": "test"
 	},
 	"dependencies": {
-		"@sbesson/json-db": "^1.0.3",
 		"ajv": "^8.1.0",
 		"ajv-formats": "^2.0.2",
 		"axios": "^1.6.2",

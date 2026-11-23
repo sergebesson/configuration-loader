@@ -17,8 +17,7 @@
 
 ## Description
 
-Permet de charger une configuration via un object JSON, un fichier, une url, une collection
-[@sbesson/json-db](https://www.npmjs.com/package/@sbesson/json-db) ou de variable d'environnement.
+Permet de charger une configuration depuis un objet JSON, un fichier, une URL ou des variables d'environnement.
 
 ## Exemple d'utilisation
 
@@ -83,12 +82,11 @@ Chaque layer est exécuté et le résultat d'un layer sera fusionné avec le ré
 
 __définition d'un layer__  
 Un layer est un objet qui décrit comment récupérer une configuration.  
-Il y a 5 types de layer possible :
+Il y a 4 types de layer possibles :
 
 * le type __object__
 * le type __file__
 * le type __url__
-* le type __json-db__
 * le type __environment__
 
 Chaque type peut contenir un attribut __desc__ permettant d'indiquer une description du layer.  
@@ -139,20 +137,6 @@ Description des différents types :
   configLoader.on("layer_url_attempt_error", (layer, attempt) => {
     console.log("tentative en erreur", layer.desc, layer.url, attempt.message);
   });
-  ```
-
-* le type __json-db__  
-  Ce type permet d'obtenir la configuration depuis une "base de donnée json" voir le module [@sbesson/json-db](https://www.npmjs.com/package/@sbesson/json-db).  
-  Ce layer doit contenir un attribut `file` et un attribut `id` qui sera utilisé via le package
-  [@sbesson/json-db](https://www.npmjs.com/package/@sbesson/json-db) pour récupérer la configuration.
-
-  ```javascript
-  {
-    type: "json-db",
-    desc: "configuration via une collection json-db"
-    file: "/path/collection",
-    id: "config"
-  }
   ```
 
 * le type __environment__  
