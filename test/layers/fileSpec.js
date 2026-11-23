@@ -62,7 +62,7 @@ describe("layer file", function () {
 			file: "./test/data/configurationFileInvalid.json",
 			errorExpect: {
 				message: "Impossible de lire ./test/data/configurationFileInvalid.json",
-				cause: sinon.match(/Unexpected token }/),
+				cause: sinon.match(/in JSON at position/),
 			},
 		}], function () {
 			it("Doit retourner une erreur", function () {

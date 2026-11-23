@@ -19,6 +19,8 @@
 
 Permet de charger une configuration depuis un objet JSON, un fichier, une URL ou des variables d'environnement.
 
+Prérequis : Node.js 22.20.0 ou une version plus récente.
+
 ## Exemple d'utilisation
 
 ```javascript

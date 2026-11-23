@@ -1,8 +1,9 @@
 "use strict";
 
-const nock = require("nock");
+const nock = require("nock").default;
 const {chai: {expect}, sinon, example} = require("@sbesson/test-helpers");
 const EventEmitter = require("events");
+const {setTimeout: wait} = require("node:timers/promises");
 
 const layerUrlFactory = require("../../layers/url.js");
 
@@ -51,9 +52,8 @@ describe("layer url", function () {
 				.reply(200, {option1: "value1", option2: {cle1: "value2"}});
 			nock("http://host.domain.tld")
 				.get("/config_timeout")
-				.delay(500)
 				.times(3)
-				.reply(200, {option1: "value1", option2: {cle1: "value2"}})
+				.reply(200, () => wait(500, {option1: "value1", option2: {cle1: "value2"}}))
 				.get("/config_timeout")
 				.reply(200, {option1: "value1", option2: {cle1: "value2"}});
 		});

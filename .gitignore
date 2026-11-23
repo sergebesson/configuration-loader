@@ -1,9 +1,6 @@
 # vscode
 .vscode
 
-# npm
-package-lock.json
-
 # Logs
 logs
 *.log

@@ -1,11 +1,14 @@
-module.exports = {
-	env: {
-		node: true,
-		mocha: true,
-		es6: true,
-	},
-	plugins: ["node"],
-	extends: ["eslint:recommended", "plugin:node/recommended"],
+"use strict";
+
+const {defineConfig, globalIgnores} = require("eslint/config");
+const js = require("@eslint/js");
+const node = require("eslint-plugin-n");
+const globals = require("globals");
+
+module.exports = defineConfig(globalIgnores(["coverage/", "eslint.config.js"]), {
+	files: ["**/*.js"],
+	extends: [js.configs.recommended, node.configs["flat/recommended-script"]],
+	languageOptions: {sourceType: "commonjs"},
 	rules: {
 		/**
 		 * Possible Errors (la plupart sont activées par défaut et ne sont pas répétées ici si elles ne sont pas surchargées)
@@ -15,7 +18,6 @@ module.exports = {
 		"no-prototype-builtins": "off",
 		"no-template-curly-in-string": "warn",
 		"no-unsafe-negation": "warn",
-		"valid-jsdoc": "off",
 		/**
 		 * Best Practices (quelques unes sont activées par défaut et ne sont pas répétées ici si elles ne sont pas surchargées)
 		 */
@@ -166,7 +168,7 @@ module.exports = {
 		"no-multiple-empty-lines": "warn",
 		"no-negated-condition": "off",
 		"no-nested-ternary": "warn",
-		"no-new-object": "error",
+		"no-object-constructor": "error",
 		"no-plusplus": "off",
 		"no-restricted-syntax": "off",
 		"no-tabs": "off",
@@ -185,7 +187,6 @@ module.exports = {
 		"padded-blocks": "off",
 		"quote-props": ["warn", "as-needed"],
 		quotes: ["warn", "double"],
-		"require-jsdoc": "off",
 		"semi-spacing": ["warn", {before: false, after: true}],
 		semi: ["warn", "always"],
 		"sort-keys": "off",
@@ -227,6 +228,15 @@ module.exports = {
 		/**
 		 * Plugin Node
 		 */
-		"node/no-deprecated-api": "warn",
+		"n/no-deprecated-api": "warn",
 	},
-};
+}, {
+	files: ["test/**/*.js"],
+	languageOptions: {globals: globals.mocha},
+	rules: {
+		"no-unused-expressions": "off", //pour chai.js
+		"no-invalid-this": "off", //pour mocha
+		"max-nested-callbacks": "off",
+		"n/no-unpublished-require": "off",
+	},
+});

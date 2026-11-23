@@ -1,7 +1,7 @@
 "use strict";
 
 const _ = require("lodash");
-const nock = require("nock");
+const nock = require("nock").default;
 const {sinon, chai: {expect}, example} = require("@sbesson/test-helpers");
 
 const ConfigLoader = require("../index.js").ConfigLoader;
