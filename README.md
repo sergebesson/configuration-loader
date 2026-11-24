@@ -3,6 +3,7 @@
 <!-- TOC -->
 
 - [Description](#description)
+- [Migrer de 1.x à 2.0.0](#migrer-de-1x-à-200)
 - [Développement](#développement)
 - [Exemple d'utilisation](#exemple-dutilisation)
 - [API](#api)
@@ -23,7 +24,19 @@ Permet de charger une configuration depuis un objet JSON, un fichier, une URL ou
 
 Prérequis : Node.js 22.20.0 ou une version plus récente.
 
-Le paquet est en ESM et expose uniquement sa racine. L’import nommé `ConfigLoader` et `require("@sbesson/configuration-loader").ConfigLoader` renvoient la même classe. Le `require()` reste synchrone avec les réglages par défaut de Node ; le mode où `require(esm)` est désactivé n’est pas pris en charge. Les anciens accès directs, comme `@sbesson/configuration-loader/ConfigLoader.js` et `@sbesson/configuration-loader/package.json`, ne sont plus exposés.
+Le paquet est en ESM et expose uniquement sa racine. L’import nommé `ConfigLoader` et `require("@sbesson/configuration-loader").ConfigLoader` renvoient la même classe. Le `require()` reste synchrone avec les réglages par défaut de Node ; le mode où `require(esm)` est désactivé n’est pas pris en charge.
+
+## Migrer de 1.x à 2.0.0
+
+1. **Mettre Node.js à niveau.** Passer de Node 16.4.2 minimum à Node 22.20.0 minimum, y compris en CI et en production.
+2. **Importer depuis la racine du paquet.** Remplacer les accès internes comme `@sbesson/configuration-loader/ConfigLoader.js` par l’import nommé ou le `require()` de la racine montrés [ci-dessous](#exemple-dutilisation). Les autres sous-chemins, dont `@sbesson/configuration-loader/package.json`, ne sont plus exposés.
+3. **Remplacer les layers `json-db`.** Charger le document dans l’application, puis passer les données de configuration à `{type: "object", config}`. Retirer le champ d’identifiant si l’application dépend de son absence : l’ancien layer le retirait automatiquement. Un descripteur de type `json-db` est désormais signalé comme type inconnu.
+4. **Ne plus écrire dans `.config` ni dans les membres internes.** Modifier les données fournies aux layers, puis rappeler `load()`. `.config` renvoie une copie et n’a pas de setter. Pour les diagnostics, utiliser `hasLayersInError()` et `getLayersInError()` au lieu de lire `layers` directement.
+5. **Charger le YAML via `file` ou un parseur explicite.** Le chargeur ne rend plus `require("./config.yaml")` possible par effet de bord. Les fichiers YAML restent pris en charge par le layer `file`, ainsi que les configurations JavaScript CommonJS (`.cjs` ou `.js` dans un périmètre CommonJS).
+
+Si vous ajoutez des layers au dossier `layers/`, utilisez un export ESM par défaut pour les fabriques `.js`. Le dossier reste parcouru à chaque construction et la fabrique est appelée pour chaque instance. Placez l’initialisation par instance dans la fabrique : le code au niveau du module n’est plus réexécuté à chaque construction.
+
+Un rechargement rejeté par le schéma laisse la dernière configuration valide accessible. Les erreurs de layer n’empêchent plus le repli sur un layer valide ; les URL malformées sont rejetées avant la première tentative et le travail HTTP s’arrête à la fin du chargement.
 
 ## Développement
 
@@ -59,15 +72,15 @@ configLoader.load([
     file: "path/config.json"
   }
 ]).then(() => {
-  if (configLoader.hasLayersInErrors()) {
-    console.log("Le chargement de la configuration à rencontrer une erreur",
+  if (configLoader.hasLayersInError()) {
+    console.log("Le chargement de la configuration a rencontré une erreur",
       configLoader.getLayersInError());
     throw new Error("Chargement de la configuration en erreur");
   }
   console.log("option 1", configLoader.getValue("option1"));
   console.log("option 2", configLoader.getValue("option2.cle1"));
   console.log("option other", configLoader.getValue("optionOther", "defaultValue"));
-}).catch((error) {
+}).catch((error) => {
   console.log("La configuration est incorrecte", error.message, error.details);
 });
 ```
@@ -140,7 +153,7 @@ Description des différents types :
   ```javascript
   {
     type: "file",
-    desc: "configuration via un fichier"
+    desc: "configuration via un fichier",
     file: "configuration/config.json"
   }
   ```
@@ -156,7 +169,7 @@ Description des différents types :
   ```javascript
   {
     type: "url",
-    desc: "configuration via une url"
+    desc: "configuration via une url",
     url: "https://www.domain.tld/configuration/config.json"
   }
   ```
@@ -196,6 +209,7 @@ Description des différents types :
       OPTION2: "rubrique.option2",
       BOOL: {type: "boolean", path: "bool"},
       NUMBER: {type: "number", path: "rubrique.number"},
+    }
   }
   ```
 
@@ -242,9 +256,9 @@ Permet de récupérer une option. Si cette option n'existe pas retourne `default
 Exemple :
 
 ```javascript
-const ConfigLoader = require("@sbesson/configuration-loader").ConfigLoader;
+import {ConfigLoader} from "@sbesson/configuration-loader";
 
-configLoader = new ConfigLoader();
+const configLoader = new ConfigLoader();
 configLoader.load([{
   type: "object",
   config: {option1: "value1", option2: {cle1: "value2"}}
