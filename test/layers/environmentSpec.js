@@ -1,9 +1,8 @@
-"use strict";
+import assert from "node:assert/strict";
+import {describe, test, beforeEach, afterEach} from "node:test";
+import createEnvironmentLayer from "../../layers/environment.js";
 
-const assert = require("node:assert/strict");
-const {describe, test, beforeEach, afterEach} = require("node:test");
-
-const layerEnvironment = require("../../layers/environment.js")();
+const layerEnvironment = createEnvironmentLayer();
 
 describe("layer environment", function () {
 	describe("load()", function () {

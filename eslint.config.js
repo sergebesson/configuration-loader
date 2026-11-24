@@ -1,19 +1,19 @@
-"use strict";
+import {defineConfig, globalIgnores} from "eslint/config";
+import js from "@eslint/js";
+import node from "eslint-plugin-n";
 
-const {defineConfig, globalIgnores} = require("eslint/config");
-const js = require("@eslint/js");
-const node = require("eslint-plugin-n");
-
-module.exports = defineConfig(globalIgnores(["coverage/", "eslint.config.js"]), {
+export default defineConfig(globalIgnores(["coverage/", "eslint.config.js"]), {
 	files: ["**/*.js"],
-	extends: [js.configs.recommended, node.configs["flat/recommended-script"]],
-	languageOptions: {sourceType: "commonjs"},
+	extends: [js.configs.recommended, node.configs["flat/recommended"]],
 	rules: {
 		/**
 		 * Possible Errors (la plupart sont activées par défaut et ne sont pas répétées ici si elles ne sont pas surchargées)
 		 */
 		"no-console": "warn", //surchargée
-		"no-extra-parens": ["warn", "all", {nestedBinaryExpressions: false}],
+		"no-extra-parens": ["warn", "all", {
+			nestedBinaryExpressions: false,
+			allowParensAfterCommentPattern: "^\\*\\s*@(type|satisfies)\\b",
+		}],
 		"no-prototype-builtins": "off",
 		"no-template-curly-in-string": "warn",
 		"no-unsafe-negation": "warn",
@@ -230,9 +230,13 @@ module.exports = defineConfig(globalIgnores(["coverage/", "eslint.config.js"]), 
 		"n/no-deprecated-api": "warn",
 	},
 }, {
+	files: ["test/data/**/*.js"],
+	extends: [node.configs["flat/recommended-script"]],
+	languageOptions: {sourceType: "commonjs"},
+}, {
 	files: ["test/**/*.js"],
 	rules: {
 		"max-nested-callbacks": "off",
-		"n/no-unpublished-require": "off",
+		"n/no-unpublished-import": "off",
 	},
 });

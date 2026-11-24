@@ -1,13 +1,145 @@
-"use strict";
-
-const assert = require("node:assert/strict");
-const {describe, test, beforeEach, afterEach} = require("node:test");
-const nock = require("nock").default;
-
-const ConfigLoader = require("../index.js").ConfigLoader;
+import assert from "node:assert/strict";
+import {execFile} from "node:child_process";
+import {randomUUID} from "node:crypto";
+import {cp as copy, mkdtemp, rm as remove, symlink, writeFile} from "node:fs/promises";
+import {createRequire} from "node:module";
+import {tmpdir} from "node:os";
+import {resolve} from "node:path";
+import {describe, test, beforeEach, afterEach} from "node:test";
+import {fileURLToPath} from "node:url";
+import {promisify} from "node:util";
+import nock from "nock";
+import {ConfigLoader} from "@sbesson/configuration-loader";
 
 describe("class ConfigLoader", function () {
+	test("Expose le même constructeur à la racine en ESM et en CommonJS", function () {
+		const require = createRequire(import.meta.url);
+		assert.equal(require("@sbesson/configuration-loader").ConfigLoader, ConfigLoader);
+		assert.throws(() => require("@sbesson/configuration-loader/ConfigLoader.js"), {
+			code: "ERR_PACKAGE_PATH_NOT_EXPORTED",
+		});
+	});
+
+	test("Charge un layer YAML sans enregistrer d’extensions CommonJS", async function () {
+		await promisify(execFile)(process.execPath, ["-e", `
+			const assert = require("node:assert/strict");
+			const extensions = {...require.extensions};
+			assert.equal(extensions[".yaml"], undefined);
+			assert.equal(extensions[".yml"], undefined);
+			const {ConfigLoader} = require(process.argv[1]);
+			const loader = new ConfigLoader();
+			assert.deepEqual({...require.extensions}, extensions);
+			process.exitCode = 1;
+			loader.load([{type: "file", file: "test/data/configurationFile.yaml"}]).then(() => {
+				assert.equal(loader.getValue("option2.cle2"), "value cle2");
+				assert.deepEqual({...require.extensions}, extensions);
+				process.exitCode = 0;
+			});
+		`, fileURLToPath(import.meta.resolve("@sbesson/configuration-loader"))], {cwd: tmpdir()});
+	});
+
+	for (const [operation, changeFile] of Object.entries({
+		modification: (file) => writeFile(file, "value: après"),
+		suppression: remove,
+	})) {
+		test(`Partage le cache YAML entre chargeurs après ${operation}`, async function (context) {
+			const directory = await mkdtemp(resolve(tmpdir(), "configuration-loader-"));
+			context.after(() => remove(directory, {recursive: true, force: true}));
+			const file = resolve(directory, "settings");
+			const yamlFile = `${file}.yaml`;
+			await writeFile(yamlFile, "value: avant");
+
+			const first = new ConfigLoader();
+			await first.load([{type: "file", file}]);
+			assert.equal(first.getValue("value"), "avant");
+
+			await changeFile(yamlFile);
+			const second = new ConfigLoader();
+			await second.load([{type: "file", file}]);
+			assert.equal(second.getValue("value"), "avant");
+		});
+	}
+
+	test("Découvre un nouveau layer par son nom de fichier", async function (context) {
+		const directory = await mkdtemp(resolve(tmpdir(), "configuration-loader-"));
+		context.after(() => remove(directory, {recursive: true, force: true}));
+		const root = fileURLToPath(new URL("..", import.meta.url));
+		const entries = ["package.json", "index.js", "ConfigLoader.js", "layers", "models", "yaml-cache.js"];
+		await Promise.all(entries.map((entry) =>
+			copy(resolve(root, entry), resolve(directory, entry), {recursive: true})));
+		await symlink(resolve(root, "node_modules"), resolve(directory, "node_modules"), "junction");
+
+		const requireFromCopy = createRequire(resolve(directory, "package.json"));
+		const {ConfigLoader: TemporaryConfigLoader} = requireFromCopy("@sbesson/configuration-loader");
+		const before = new TemporaryConfigLoader();
+		const type = `discovery-${randomUUID()}`;
+		await writeFile(resolve(directory, "layers", `${type}.js`), `
+			let factories = 0;
+			export default ({options}) => {
+				const instance = ++factories;
+				return {
+					async load(layer) {
+					if ("failure" in layer) {
+							throw layer.failure;
+						}
+						return {...layer, config: {discovery: {value: options.discoveryValue, instance}}};
+					},
+				};
+			};
+		`);
+
+		const first = new TemporaryConfigLoader({discoveryValue: "première instance"});
+		const second = new TemporaryConfigLoader({discoveryValue: "seconde instance"});
+		await assert.rejects(before.load([{type}]), {type: "layer"});
+		await first.load([{type}]);
+		await second.load([{type}]);
+		assert.deepEqual(first.getValue("discovery"), {value: "première instance", instance: 1});
+		assert.deepEqual(second.getValue("discovery"), {value: "seconde instance", instance: 2});
+
+		const rejected = new Error("rejet du layer découvert");
+		await first.load([
+			{type, failure: rejected}, {type, failure: null},
+			{type: "object", config: {discovery: {value: "repli"}}},
+		]);
+		assert.equal(first.getValue("discovery.value"), "repli");
+		const failures = first.getLayersInError();
+		assert.deepEqual(failures.map((layer) => layer.type), [type, type]);
+		assert.equal(failures[0].error, rejected);
+		assert.ok(failures[1].error instanceof Error);
+	});
+
+	test("Expose une copie profonde de la configuration sans permettre son remplacement", async function () {
+		const loader = new ConfigLoader();
+		await loader.load([{type: "object", config: {server: {ports: [8080, 8443]}}}]);
+
+		const snapshot = loader.config;
+		snapshot.server.ports.splice(0, 1, 9090);
+		assert.deepEqual(loader.config, {server: {ports: [8080, 8443]}});
+		assert.deepEqual(loader.getValue("server.ports"), [8080, 8443]);
+		assert.throws(() => {
+			loader.config = {};
+		}, TypeError);
+	});
+
 	describe("load(layers)", function () {
+		test("Conserve la configuration après un échec total, puis la remplace au succès", async function () {
+			const loader = new ConfigLoader();
+			assert.deepEqual(loader.config, {});
+			await loader.load([{type: "object", config: {source: "initiale", ancienne: true}}]);
+
+			await assert.rejects(loader.load([{type: "file"}]), {type: "layer"});
+			assert.deepEqual(loader.config, {source: "initiale", ancienne: true});
+			assert.equal(loader.getValue("source"), "initiale");
+			assert.equal(loader.hasLayersInError(), true);
+			assert.deepEqual(loader.getLayersInError().map(({type}) => type), ["file"]);
+
+			await loader.load([{type: "object", config: {source: "nouvelle"}}]);
+			assert.deepEqual(loader.config, {source: "nouvelle"});
+			assert.equal(loader.getValue("source"), "nouvelle");
+			assert.equal(loader.hasLayersInError(), false);
+			assert.deepEqual(loader.getLayersInError(), []);
+		});
+
 		describe("Quand on récupère une configuration", function () {
 			beforeEach(function () {
 				nock("http://host.domain.tld")
@@ -178,6 +310,28 @@ describe("class ConfigLoader", function () {
 						});
 				});
 			});
+
+			for (const [scenario, layer] of [
+				["un descripteur null", null],
+				["une entrée environment null", {type: "environment", mapping: {CONFIG_OPTION1: null}}],
+				["une entrée environment sans path", {
+					type: "environment", mapping: {CONFIG_OPTION1: {type: "number"}},
+				}],
+			]) {
+				test(`Doit conserver le repli après ${scenario}`, async function () {
+					const loader = new ConfigLoader();
+					const errors = [];
+					loader.on("layer_load_error", (failed) => errors.push(failed));
+					await loader.load([layer, {type: "object", config: {source: "repli"}}]);
+					assert.equal(loader.getValue("source"), "repli");
+					const failures = loader.getLayersInError();
+					assert.equal(failures.length, 1);
+					const [{error, ...descriptor}] = failures;
+					assert.ok(error instanceof Error);
+					assert.deepEqual(descriptor, layer ?? {});
+					assert.deepEqual(errors, layer ? failures : []);
+				});
+			}
 		});
 		describe("Quand tous les layers sont en erreurs", function () {
 			test("Doit retourner une erreur", function () {
@@ -247,6 +401,18 @@ describe("class ConfigLoader", function () {
 					config: {option1: "1"},
 				}]);
 			});
+
+			test("Doit conserver la dernière configuration valide après un rechargement rejeté", async function () {
+				await configLoader.load([{type: "object", config: {option1: "valide"}}]);
+				assert.equal(configLoader.getValue("option1"), "valide");
+
+				await assert.rejects(configLoader.load([{
+					type: "object",
+					config: {option1: 42},
+				}]), {type: "jsonschema"});
+				assert.deepEqual(configLoader.config, {option1: "valide"});
+				assert.equal(configLoader.getValue("option1"), "valide");
+			});
 		});
 		describe("Quand on écoute les événements", function () {
 			test("Doit appeler les événements `layer_load_start`, `layer_load_stop` et `layer_load_error`", function ({mock}) {
@@ -280,6 +446,32 @@ describe("class ConfigLoader", function () {
 						assert.equal(failedLayer.error.message, "'file' n'est pas valide");
 					});
 			});
+
+			for (const [event, layer] of [
+				["layer_load_start", {type: "object", config: {}}],
+				["layer_load_stop", {type: "object", config: {}}],
+				["layer_load_error", {type: "object"}],
+				["layer_url_attempt_error", {type: "url", url: "http://host.domain.tld/config"}],
+			]) {
+				test(`Doit propager l'exception d'un auditeur de ${event}`, async function (context) {
+					if (layer.type === "url") {
+						nock("http://host.domain.tld").get("/config").reply(503);
+						context.after(() => nock.cleanAll());
+					}
+					const loader = new ConfigLoader({httpTimeoutInS: 1});
+					const failure = new Error("exception de l'auditeur");
+					loader.once(event, () => {
+						throw failure;
+					});
+					const load = () => loader.load([layer, {type: "object", config: {source: "repli"}}]);
+					const isListenerFailure = (error) => error === failure;
+					if (event === "layer_load_start") {
+						assert.throws(load, isListenerFailure);
+					} else {
+						await assert.rejects(load, isListenerFailure);
+					}
+				});
+			}
 		});
 	});
 	describe("hasLayersInError()", function () {

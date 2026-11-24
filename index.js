@@ -1,7 +1,3 @@
-"use strict";
+// @ts-check
 
-const ConfigLoader = require("./ConfigLoader.js");
-
-module.exports = {
-	ConfigLoader,
-};
+export {ConfigLoader} from "./ConfigLoader.js";

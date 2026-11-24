@@ -8,6 +8,7 @@
 - [API](#api)
   - [class ConfigLoader](#class-configloader)
   - [new ConfigLoader([options])](#new-configloaderoptions)
+  - [config](#config)
   - [load(layers)](#loadlayers)
   - [hasLayersInError()](#haslayersinerror)
   - [getLayersInError()](#getlayersinerror)
@@ -22,19 +23,32 @@ Permet de charger une configuration depuis un objet JSON, un fichier, une URL ou
 
 Prérequis : Node.js 22.20.0 ou une version plus récente.
 
+Le paquet est en ESM et expose uniquement sa racine. L’import nommé `ConfigLoader` et `require("@sbesson/configuration-loader").ConfigLoader` renvoient la même classe. Le `require()` reste synchrone avec les réglages par défaut de Node ; le mode où `require(esm)` est désactivé n’est pas pris en charge. Les anciens accès directs, comme `@sbesson/configuration-loader/ConfigLoader.js` et `@sbesson/configuration-loader/package.json`, ne sont plus exposés.
+
 ## Développement
 
 - `npm test` exécute les tests avec `node:test`.
 - `npm run coverage` exécute les mêmes tests et affiche le rapport de couverture de Node.js dans le terminal (lignes, branches et fonctions). Aucun rapport HTML n'est généré.
 - `npm run lint` vérifie le code avec ESLint.
 - `npm run knip` détecte les dépendances inutilisées ou non déclarées. Les layers chargés dynamiquement par `consign` sont déclarés comme points d'entrée dans `knip.json`.
+- `npm run typecheck` vérifie les types JSDoc des sources JavaScript en mode strict, sans générer de fichiers.
+
+À chaque construction, `consign` parcourt `layers/` et appelle les fabriques ESM avec le contexte du nouveau chargeur. Le code au niveau d’un module déjà chargé n’est pas réexécuté.
 
 ## Exemple d'utilisation
 
 ```javascript
-const ConfigLoader = require("@sbesson/configuration-loader").ConfigLoader;
+import {ConfigLoader} from "@sbesson/configuration-loader";
+```
 
-configLoader = new ConfigLoader();
+Avec CommonJS :
+
+```javascript
+const {ConfigLoader} = require("@sbesson/configuration-loader");
+```
+
+```javascript
+const configLoader = new ConfigLoader();
 configLoader.load([
   {
     type: "object",
@@ -84,6 +98,12 @@ __options__ est un objet qui peut contenir les attributs suivants :
   Délai en seconde avant une nouvelle tentative.  
   Par défaut 10s.
 
+### config
+
+`loader.config` renvoie à chaque lecture une copie profonde de la dernière configuration valide (`{}` avant le premier chargement réussi), selon la même sémantique que `getValue()`. La propriété n’a pas de setter : une affectation directe lève une erreur `TypeError` en mode strict. Modifier les objets ordinaires ou tableaux de la copie ne modifie pas ceux du chargeur. Pour ne lire qu’une option, utiliser `getValue()`.
+
+Le contexte `app`, les résultats bruts `layers`, le validateur `ajvValidate` et les anciennes méthodes suffixées `Private` ne sont plus accessibles. Utiliser les méthodes publiques ci-dessous pour charger la configuration et consulter les diagnostics.
+
 ### load(layers)
 
 Charge la configuration à partir de layers.  
@@ -115,7 +135,7 @@ Description des différents types :
 
 * le type __file__  
   Ce type permet d'obtenir la configuration dans un fichier json, yaml ou js (module nodejs).  
-  Le layer doit contenir un attribut `file` indiquant le chemin du fichier.
+  Le layer doit contenir un attribut `file` indiquant le chemin du fichier. Un chemin relatif est résolu depuis le dossier du paquet, pas depuis le répertoire courant. Les fichiers de configuration JavaScript CommonJS restent pris en charge : utiliser `.cjs` ou un fichier `.js` dans un périmètre CommonJS.
 
   ```javascript
   {

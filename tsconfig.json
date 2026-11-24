@@ -1,0 +1,13 @@
+{
+	"compilerOptions": {
+		"allowJs": true,
+		"checkJs": true,
+		"strict": true,
+		"noEmit": true,
+		"module": "NodeNext",
+		"target": "ES2023",
+		"lib": ["ES2023"],
+		"types": ["node"]
+	},
+	"include": ["index.js", "ConfigLoader.js", "layers/*.js", "models/layer.js", "yaml-cache.js", "types/*.d.ts"]
+}

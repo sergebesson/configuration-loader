@@ -1,18 +1,20 @@
-"use strict";
+// @ts-check
 
-const _ = require("lodash");
-const layerModel = require("../models/layer.js");
+import _ from "lodash";
+import * as layerModel from "../models/layer.js";
 
-module.exports = function () {
+/** @import {LayerDescriptor, LayerResult} from "../models/layer.js" */
+
+export default function () {
 	return {
 		load,
 	};
-};
+}
 
 /**
  * Charge un layer de type object
- * @param {Object} layer le layer
- * @returns {Promise} si résolue retourne la configuration
+ * @param {LayerDescriptor} layer
+ * @returns {Promise<LayerResult>}
  */
 function load(layer) {
 	const messageError = isLayerValid(layer);
@@ -24,9 +26,8 @@ function load(layer) {
 }
 
 /**
- * Control que le layer soit valide
- * @param {Object} config
- * @returns {Object} contenant valid (un boolean) et error (le message d'erreur)
+ * @param {LayerDescriptor} layer
+ * @returns {string | undefined} le message si la configuration est invalide
  */
 function isLayerValid({config}) {
 	if (!_.isPlainObject(config)) {

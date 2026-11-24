@@ -1,20 +1,24 @@
-"use strict";
+// @ts-check
 
-const _ = require("lodash");
-const dot = require("dot-object");
+import _ from "lodash";
+import dot from "dot-object";
+import * as layerModel from "../models/layer.js";
 
-const layerModel = require("../models/layer.js");
+/** @import {LayerDescriptor, LayerResult} from "../models/layer.js" */
+/** @import {PropertyPath} from "lodash" */
 
-module.exports = function () {
+/** @typedef {{path?: unknown, type?: unknown}} MappingEntry */
+
+export default function () {
 	return {
 		load,
 	};
-};
+}
 
 /**
  * Charge un layer de type environment
- * @param {Object} layer le layer
- * @returns {Promise} si résolue retourne la configuration
+ * @param {LayerDescriptor} layer
+ * @returns {Promise<LayerResult>}
  */
 function load(layer) {
 	const {mapping} = layer;
@@ -23,26 +27,32 @@ function load(layer) {
 		return Promise.resolve(layerModel.setLayerInError(layer, {message: messageError}));
 	}
 
-	const dotMapping = _.reduce(mapping, (_dotMapping, value, key) => {
-		_dotMapping[key] = _.isPlainObject(value) ? value.path : value;
+	// Seul le conteneur a été validé ; les entrées restent brutes.
+	const entries = /** @type {Record<string, unknown>} */ (mapping);
+	const dotMapping = _.reduce(entries, (_dotMapping, value, key) => {
+		_dotMapping[key] = _.isPlainObject(value) ?
+			/** @type {MappingEntry} */ (value).path : value;
 		return _dotMapping;
-	}, {});
+	}, /** @type {Record<string, unknown>} */ ({}));
 
 	const config = dot.transform(dotMapping, process.env);
 
 	let errorMessage = "";
-	const success = _.every(mapping, (map, key) => {
+	const success = _.every(entries, (entry, key) => {
+		const map = /** @type {MappingEntry} */ (entry);
 		if (!_.isString(map.type)) {
 			return true;
 		}
-		const value = _.get(config, map.path);
+		/** @type {unknown} */
+		const value = _.get(config, /** @type {PropertyPath} */ (map.path));
 		if (_.isUndefined(value)) {
 			return true;
 		}
 
 		switch (map.type) {
 			case "boolean":
-				_.set(config, map.path, value === "true" || value === "on" || value === "1");
+				_.set(config, /** @type {PropertyPath} */ (map.path),
+					value === "true" || value === "on" || value === "1");
 				break;
 			case "number":
 				{
@@ -51,7 +61,7 @@ function load(layer) {
 						errorMessage = `La variable d'environnement '${ key }' n'est pas un nombre (${ value })`;
 						return false;
 					}
-					_.set(config, map.path, newValue);
+					_.set(config, /** @type {PropertyPath} */ (map.path), newValue);
 				}
 				break;
 			default:
@@ -68,9 +78,8 @@ function load(layer) {
 }
 
 /**
- * Control que le layer soit valide
- * @param {Object} mapping
- * @returns {Object} contenant valid (un boolean) et error (le message d'erreur)
+ * @param {LayerDescriptor} layer
+ * @returns {string | undefined} le message si le mapping est invalide
  */
 function isLayerValid({mapping}) {
 	if (!_.isPlainObject(mapping)) {

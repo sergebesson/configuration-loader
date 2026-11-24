@@ -1,9 +1,8 @@
-"use strict";
+import assert from "node:assert/strict";
+import {describe, test} from "node:test";
+import createObjectLayer from "../../layers/object.js";
 
-const assert = require("node:assert/strict");
-const {describe, test} = require("node:test");
-
-const layerObject = require("../../layers/object.js")();
+const layerObject = createObjectLayer();
 
 describe("layer object", function () {
 	describe("load()", function () {

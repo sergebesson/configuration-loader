@@ -1,11 +1,24 @@
-"use strict";
+// @ts-check
 
-const _ = require("lodash");
-const axios = require("axios");
+import {setTimeout as wait} from "node:timers/promises";
+import _ from "lodash";
+import axios from "axios";
+import * as layerModel from "../models/layer.js";
 
-const layerModel = require("../models/layer.js");
+/** @import {HttpAttempt, LayerDescriptor, LayerResult} from "../models/layer.js" */
+/** @import {LayerEvents, LoaderOptions} from "../ConfigLoader.js" */
 
-module.exports = function (app) {
+/**
+ * @typedef {object} UrlContext
+ * @property {LoaderOptions} [options]
+ * @property {{timeService?: TimeService}} [services]
+ * @property {Pick<import("node:events").EventEmitter<LayerEvents>, "emit">} configLoader
+ */
+
+/** @typedef {typeof delayMs} TimeService */
+
+/** @param {UrlContext} app */
+export default function (app) {
 	const httpTimeoutRequestInS = _.get(app, "options.httpTimeoutRequestInS", 20);
 	const httpTimeoutInS = _.get(app, "options.httpTimeoutInS", 180); // 3mn
 	const httpRetryDelayInS = _.get(app, "options.httpRetryDelayInS", 10);
@@ -18,8 +31,8 @@ module.exports = function (app) {
 
 	/**
 	 * Charge un layer de type url
-	 * @param {Object} layer le layer
-	 * @returns {Promise} si résolue retourne la configuration
+	 * @param {LayerDescriptor} layer
+	 * @returns {Promise<LayerResult>}
 	 */
 	function load(layer) {
 		const {url} = layer;
@@ -28,54 +41,55 @@ module.exports = function (app) {
 			return Promise.resolve(layerModel.setLayerInError(layer, {message: messageError}));
 		}
 
+		/** @type {HttpAttempt[]} */
 		const attempts = [];
-		let timeout = false;
-		// On va lancer deux promises, si la 1ere à finir est initTimeout, c'est qu'on a pas réussi
-		// dans les temps à charger l'url
-		return Promise.race([
-			initTimeout(),
+		const controller = new AbortController();
+		const {signal} = controller;
+		const result = Promise.race([
+			timeService(() => layerModel.setLayerInError(layer,
+				{message: `le délai de ${httpTimeoutInS}s a expiré`},
+				{attempts},
+			), httpTimeoutInS * 1000, signal),
 			tryToLoadHttp(),
-		]);
+		]).finally(() => controller.abort());
+		// Les tentatives ne renvoient undefined qu'après la fin de la course (annulation).
+		return /** @type {Promise<LayerResult>} */ (result);
 
-		// Promise de timeout
-		function initTimeout() {
-			return timeService(() => {
-				timeout = true;
-				return Promise.resolve(
-					layerModel.setLayerInError(layer,
-						{message: `le délai de ${httpTimeoutInS}s a expiré`},
-						{attempts},
-					),
-				);
-			}, httpTimeoutInS * 1000);
-		}
-
-		// Promise de tentative de GET sur l'url
+		/** @returns {Promise<LayerResult | undefined> | undefined} */
 		function tryToLoadHttp() {
-			if (timeout) {
+			if (signal.aborted) {
 				return;
 			}
 			// On fait le GET
-			return axios.get(url, {timeout: httpTimeoutRequestInS * 1000})
-				.then((response) => layerModel.setConfigInLayer(layer, response.data, {attempts}))
-				.catch((errorAxios) => {
+			const requestUrl = /** @type {string} */ (url);
+			return axios.get(requestUrl, {timeout: httpTimeoutRequestInS * 1000, signal})
+				.then((/** @type {import("axios").AxiosResponse<unknown>} */ response) =>
+					layerModel.setConfigInLayer(layer, response.data, {attempts}))
+				.catch((/** @type {unknown} */ errorAxios) => {
+					if (signal.aborted) {
+						return;
+					}
 					// On retente
+					const error = /** @type {import("axios").AxiosError<unknown>} */ (errorAxios);
 					const attempt = _.assign(
-						{message: errorAxios.message},
-						_.pick(errorAxios.response, ["status", "data", "headers"]),
+						{message: error.message},
+						_.pick(error.response, ["status", "data", "headers"]),
 					);
 					attempts.push(attempt);
-					configLoader.emit("layer_url_attempt_error", layer, attempt);
-					return timeService(tryToLoadHttp, httpRetryDelayInS * 1000);
+					try {
+						configLoader.emit("layer_url_attempt_error", layer, attempt);
+					} catch (listenerError) {
+						throw new layerModel.LayerListenerError(undefined, {cause: listenerError});
+					}
+					return timeService(tryToLoadHttp, httpRetryDelayInS * 1000, signal);
 				});
 		}
 	}
-};
+}
 
 /**
- * Control que le layer soit valide
- * @param {String} url
- * @returns {Object} contenant valid (un boolean) et error (le message d'erreur)
+ * @param {LayerDescriptor} layer
+ * @returns {string | undefined} le message si l'URL est invalide
  */
 function isLayerValid({url}) {
 	if (!isUrlValid(url)) {
@@ -84,25 +98,24 @@ function isLayerValid({url}) {
 }
 
 /**
- * Control l'url
- * @param {String} url
+ * @param {unknown} url
  */
 function isUrlValid(url) {
 	return (
 		_.isString(url) &&
-			(url.startsWith("http://") ||
-			url.startsWith("https://"))
+			(url.startsWith("http://") || url.startsWith("https://")) &&
+			URL.canParse(url)
 	);
 }
 
 /**
  * Execute une callback au bout d'un certain délai
- * @param {Function} callback la callback
- * @param {Integer} delay le délai en ms
- * @returns {Promise} exécuté au bout du delay avec la valeur de retour de la callback
+ * @template T
+ * @param {() => T | PromiseLike<T>} callback la callback
+ * @param {number} delay le délai en ms
+ * @param {AbortSignal} signal annule le délai avant l'exécution de la callback
+ * @returns {Promise<T>} résolue avec le résultat de la callback
  */
-function delayMs(callback, delay) {
-	return new Promise((resolve) => {
-		_.delay(() => resolve(callback()), delay);
-	});
+function delayMs(callback, delay, signal) {
+	return wait(delay, undefined, {signal}).then(callback);
 }
